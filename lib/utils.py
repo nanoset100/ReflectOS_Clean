@@ -6,6 +6,14 @@ from datetime import datetime, timedelta
 from typing import List, Optional
 import re
 
+# 데모 데이터 구분 태그 상수
+DEMO_TAG = "__demo__"
+
+
+def has_demo_tag(tags):
+    """tags 배열에 DEMO_TAG가 포함되어 있는지 확인 (None/빈배열 안전)"""
+    return bool(tags) and (DEMO_TAG in tags)
+
 
 def format_datetime(dt_string: str, format: str = "%Y-%m-%d %H:%M") -> str:
     """ISO datetime 문자열을 포맷팅"""

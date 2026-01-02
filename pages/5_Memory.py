@@ -39,6 +39,14 @@ with st.sidebar:
     )
     
     st.divider()
+    
+    exclude_demo = st.checkbox(
+        "🧪 데모 데이터 제외",
+        value=st.session_state.get("exclude_demo", True)
+    )
+    st.session_state["exclude_demo"] = exclude_demo
+    
+    st.divider()
     st.caption("💡 더 많은 체크인을 기록할수록\n검색 정확도가 높아집니다")
 
 
@@ -92,7 +100,8 @@ if search_btn and search_query:
             result = generate_rag_answer(
                 query=search_query,
                 top_k=top_k,
-                threshold=threshold
+                threshold=threshold,
+                exclude_demo=st.session_state.get("exclude_demo", True)
             )
             
             # === 답변 표시 ===

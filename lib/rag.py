@@ -7,6 +7,7 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime
 from lib.config import get_supabase_client, get_current_user_id
 from lib.openai_client import create_embedding
+from lib.utils import DEMO_TAG
 
 
 # ============================================
@@ -40,6 +41,7 @@ def save_memory_chunk(
 ) -> Optional[Dict]:
     """
     memory_chunks 테이블에 텍스트 조각 저장
+    중복 방지: checkin은 단일 유지 정책 적용
     
     Args:
         source_type: 소스 타입 ('checkin', 'extraction', 'calendar', 'plan')
@@ -58,6 +60,26 @@ def save_memory_chunk(
             return None
         
         user_id = user_id or get_current_user_id()
+        
+        # 중복 방지: checkin인 경우 기존 chunk 확인
+        if source_type == "checkin":
+            existing = client.table("memory_chunks").select("id, content").eq(
+                "user_id", user_id
+            ).eq("source_type", source_type).eq("source_id", source_id).eq(
+                "chunk_index", chunk_index
+            ).execute()
+            
+            rows = existing.data or []
+            if rows:
+                # content가 같으면 기존 row 반환 (삽입 X)
+                if rows[0].get("content") == content:
+                    return rows[0]
+                # content가 다르면 삭제 후 새로 삽입
+                client.table("memory_chunks").delete().eq(
+                    "user_id", user_id
+                ).eq("source_type", source_type).eq("source_id", source_id).eq(
+                    "chunk_index", chunk_index
+                ).execute()
         
         data = {
             "user_id": user_id,
@@ -86,6 +108,7 @@ def save_memory_embedding(
 ) -> Optional[Dict]:
     """
     memory_embeddings 테이블에 벡터 임베딩 저장
+    중복 방지: checkin은 단일 유지, extraction은 동일 content만 스킵
     
     Args:
         source_type: 소스 타입
@@ -103,6 +126,29 @@ def save_memory_embedding(
             return None
         
         user_id = user_id or get_current_user_id()
+        
+        # 중복 방지: 기존 rows 조회
+        existing = client.table("memory_embeddings").select("id, content").eq(
+            "user_id", user_id
+        ).eq("source_type", source_type).eq("source_id", source_id).execute()
+        
+        rows = existing.data or []
+        
+        if source_type == "checkin":
+            # checkin: 동일 content면 반환, 다르면 삭제 후 삽입
+            for row in rows:
+                if row.get("content") == content:
+                    return row  # 동일 content, 스킵
+            # 기존 것 삭제 (content가 다르거나 새로 삽입)
+            if rows:
+                client.table("memory_embeddings").delete().eq(
+                    "user_id", user_id
+                ).eq("source_type", source_type).eq("source_id", source_id).execute()
+        else:
+            # extraction 등: 동일 content면 스킵, 없으면 삽입 (삭제 X)
+            for row in rows:
+                if row.get("content") == content:
+                    return row  # 동일 content, 스킵
         
         # 임베딩이 없으면 생성
         if embedding is None:
@@ -225,7 +271,8 @@ def similarity_search(
     query: str,
     top_k: int = 5,
     threshold: float = 0.7,
-    source_type_filter: str = None
+    source_type_filter: str = None,
+    exclude_demo: bool = False
 ) -> List[Dict]:
     """
     유사 기억 검색 (pgvector 코사인 유사도)
@@ -235,6 +282,7 @@ def similarity_search(
         top_k: 최대 결과 수
         threshold: 최소 유사도 (0.0 ~ 1.0)
         source_type_filter: 소스 타입 필터 (선택)
+        exclude_demo: True면 데모 데이터 기반 결과 제외
     
     Returns:
         유사한 메모리 목록 [{id, source_type, source_id, content, similarity, created_at}]
@@ -267,6 +315,35 @@ def similarity_search(
         # source_type 필터 적용 (RPC에서 지원 안하면 클라이언트에서)
         if source_type_filter:
             results = [r for r in results if r.get("source_type") == source_type_filter]
+        
+        # exclude_demo 필터 적용
+        if exclude_demo and results:
+            # checkin/extraction의 source_id(=checkin_id) 수집
+            ids = list({
+                r.get("source_id") for r in results 
+                if r.get("source_type") in ("checkin", "extraction")
+            })
+            
+            if ids:
+                # 해당 checkin들의 tags 조회
+                resp = client.table("checkins").select("id, tags").eq(
+                    "user_id", user_id
+                ).in_("id", ids).execute()
+                
+                # 데모 태그 포함된 checkin_id 집합
+                demo_ids = {
+                    row["id"] for row in (resp.data or [])
+                    if DEMO_TAG in (row.get("tags") or [])
+                }
+                
+                # 데모 기반 결과 제외
+                results = [
+                    r for r in results 
+                    if not (
+                        r.get("source_type") in ("checkin", "extraction") 
+                        and r.get("source_id") in demo_ids
+                    )
+                ]
         
         return results
         
@@ -357,7 +434,8 @@ def get_sources_info(memories: List[Dict]) -> List[Dict]:
 def generate_rag_answer(
     query: str,
     top_k: int = 5,
-    threshold: float = 0.6
+    threshold: float = 0.6,
+    exclude_demo: bool = False
 ) -> Dict[str, Any]:
     """
     RAG 파이프라인: 검색 → 컨텍스트 구성 → 답변 생성
@@ -366,6 +444,7 @@ def generate_rag_answer(
         query: 사용자 질문
         top_k: 검색 결과 수
         threshold: 유사도 임계값
+        exclude_demo: True면 데모 데이터 기반 결과 제외
     
     Returns:
         {
@@ -378,7 +457,7 @@ def generate_rag_answer(
     from lib.prompts import RAG_INSIGHT_PROMPT
     
     # 1. 유사 기억 검색
-    memories = similarity_search(query, top_k=top_k, threshold=threshold)
+    memories = similarity_search(query, top_k=top_k, threshold=threshold, exclude_demo=exclude_demo)
     
     # 2. 컨텍스트 구성
     context = build_context(memories)

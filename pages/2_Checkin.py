@@ -14,6 +14,14 @@ from datetime import datetime
 st.set_page_config(page_title="Check-in - ReflectOS", page_icon="✍️", layout="wide")
 
 
+# === 자동 인덱싱 토글 값 로드 ===
+from lib.supabase_db import get_profile
+_profile = get_profile()
+_settings = (_profile or {}).get("settings") or {}
+if "auto_index_on_save" not in st.session_state:
+    st.session_state["auto_index_on_save"] = bool(_settings.get("auto_index_on_save", False))
+
+
 # === 규칙 기반 Extraction (폴백용) ===
 def extract_by_rules(content: str) -> Dict[str, List[str]]:
     """
@@ -455,6 +463,34 @@ with st.form("checkin_form"):
                     
                     st.success("✅ 체크인이 저장되었습니다!")
                     st.balloons()
+                    
+                    # === 자동 인덱싱 (토글 ON일 때만) ===
+                    if st.session_state.get("auto_index_on_save", False):
+                        from lib.config import get_openai_api_key
+                        if not get_openai_api_key():
+                            st.warning("⚠️ OpenAI API 키가 없어 자동 인덱싱을 건너뜁니다.")
+                        else:
+                            with st.spinner("🧠 자동 인덱싱 중..."):
+                                try:
+                                    from lib.rag import index_checkin, index_extraction
+                                    
+                                    # checkin 인덱싱: clean_text 우선(멀티모달/ingestor 반영)
+                                    ok_checkin = index_checkin(checkin_id, clean_text, extractions)
+                                    
+                                    # extraction 인덱싱: 추출값이 비어있지 않을 때만
+                                    ok_extraction = True
+                                    try:
+                                        if extractions and any(extractions.values()):
+                                            ok_extraction = index_extraction(checkin_id, extraction_type, extractions)
+                                    except Exception:
+                                        ok_extraction = False
+                                    
+                                    if ok_checkin and ok_extraction:
+                                        st.info("✅ 자동 인덱싱 완료 (Memory에서 즉시 검색 가능)")
+                                    else:
+                                        st.warning("⚠️ 자동 인덱싱 일부 실패 (체크인은 저장됨). 필요시 Memory에서 수동 동기화하세요.")
+                                except Exception as e:
+                                    st.warning(f"⚠️ 자동 인덱싱 오류 (체크인은 저장됨): {e}")
                     
                     # 세션 상태 초기화
                     st.session_state.transcribed_text = ""

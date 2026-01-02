@@ -11,6 +11,14 @@ st.set_page_config(page_title="Home - ReflectOS", page_icon="🏠", layout="wide
 st.title("🏠 Home")
 st.caption("최근 기록과 오늘의 요약을 확인하세요")
 
+# === 사이드바: 데모 데이터 제외 토글 ===
+with st.sidebar:
+    exclude_demo = st.checkbox(
+        "🧪 데모 데이터 제외",
+        value=st.session_state.get("exclude_demo", True)
+    )
+    st.session_state["exclude_demo"] = exclude_demo
+
 # === 오늘의 캘린더 일정 (Step 9) ===
 try:
     from lib.calendar_google import is_authenticated, get_today_events
@@ -56,7 +64,7 @@ try:
         # 최근 체크인 목록 가져오기
         st.subheader("📝 최근 체크인")
         
-        checkins = list_checkins(limit=10)
+        checkins = list_checkins(limit=10, exclude_demo=st.session_state.get("exclude_demo", True))
         
         if checkins:
             for checkin in checkins:

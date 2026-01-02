@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Optional, List, Dict, Any
 import streamlit as st
 from lib.config import get_supabase_client, get_current_user_id
+from lib.utils import has_demo_tag
 
 
 # ============================================
@@ -113,7 +114,8 @@ def insert_checkin(
 def list_checkins(
     limit: int = 10,
     offset: int = 0,
-    user_id: str = None
+    user_id: str = None,
+    exclude_demo: bool = False
 ) -> List[Dict]:
     """
     체크인 목록 조회 (최신순)
@@ -122,6 +124,7 @@ def list_checkins(
         limit: 가져올 개수
         offset: 건너뛸 개수 (페이지네이션)
         user_id: 사용자 ID
+        exclude_demo: True면 데모 데이터 제외
     
     Returns:
         체크인 레코드 목록
@@ -139,7 +142,10 @@ def list_checkins(
             .execute()
         )
         
-        return response.data or []
+        rows = response.data or []
+        if exclude_demo:
+            rows = [c for c in rows if not has_demo_tag(c.get("tags", []))]
+        return rows
     except Exception as e:
         st.error(f"체크인 목록 조회 실패: {e}")
         return []
@@ -437,7 +443,8 @@ def count_checkins_today(user_id: str = None) -> int:
 def get_checkins_date_range(
     start_date: str,
     end_date: str,
-    user_id: str = None
+    user_id: str = None,
+    exclude_demo: bool = False
 ) -> List[Dict]:
     """날짜 범위의 체크인 조회"""
     try:
@@ -454,7 +461,10 @@ def get_checkins_date_range(
             .execute()
         )
         
-        return response.data or []
+        rows = response.data or []
+        if exclude_demo:
+            rows = [c for c in rows if not has_demo_tag(c.get("tags", []))]
+        return rows
     except Exception as e:
         return []
 

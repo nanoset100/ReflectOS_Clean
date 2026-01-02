@@ -317,6 +317,39 @@ default_timezone = "Asia/Seoul"
     """)
 
 
+# === AI 자동화 ===
+st.divider()
+st.subheader("🤖 AI 자동화")
+st.caption("체크인 저장 후 자동으로 RAG 인덱싱을 실행합니다. (Memory 동기화 버튼 없이 바로 검색 가능)")
+
+try:
+    from lib.supabase_db import get_profile, upsert_profile
+    from lib.config import get_openai_api_key
+    
+    # 현재 프로필/설정 로드
+    profile = get_profile()
+    current_settings = (profile or {}).get("settings") or {}
+    stored_value = bool(current_settings.get("auto_index_on_save", False))
+    
+    # 토글의 value는 세션에 우선권
+    default_value = st.session_state.get("auto_index_on_save", stored_value)
+    auto_index = st.toggle("✅ 체크인 저장 후 자동 인덱싱", value=default_value)
+    st.session_state["auto_index_on_save"] = auto_index
+    
+    # 값이 바뀌었을 때만 저장
+    if auto_index != stored_value:
+        merged = dict(current_settings)
+        merged["auto_index_on_save"] = auto_index
+        upsert_profile({"settings": merged})
+    
+    # OpenAI 키 없을 때 안내
+    if not get_openai_api_key():
+        st.warning("OpenAI API 키가 없으면 자동 인덱싱이 동작하지 않습니다. (Settings 상단 OpenAI 상태를 확인하세요)")
+        
+except Exception as e:
+    st.error(f"AI 자동화 설정 로드 오류: {e}")
+
+
 # === 데이터 관리 ===
 st.divider()
 st.subheader("🗃️ 데이터 관리")
@@ -363,7 +396,15 @@ with demo_col1:
 with demo_col2:
     st.caption("데모 태그(`__demo__`)가 있는 체크인만 삭제합니다.")
     
-    if st.button("🧹 데모 데이터만 삭제", use_container_width=True):
+    # 삭제 안전장치
+    confirm_demo_delete = st.text_input(
+        "삭제 확인 문구",
+        placeholder="DELETE DEMO",
+        key="confirm_demo_delete"
+    )
+    can_delete_demo = (confirm_demo_delete.strip() == "DELETE DEMO")
+    
+    if st.button("🧹 데모 데이터만 삭제", use_container_width=True, disabled=not can_delete_demo):
         try:
             from lib.demo_data import delete_demo_data
             
@@ -383,6 +424,8 @@ with demo_col2:
             
         except Exception as e:
             st.error(f"오류 발생: {e}")
+    
+    st.caption("⚠️ 삭제하려면 위 입력칸에 DELETE DEMO 를 정확히 입력하세요.")
 
 st.divider()
 

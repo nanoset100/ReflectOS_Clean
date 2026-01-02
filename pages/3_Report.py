@@ -12,6 +12,14 @@ st.set_page_config(page_title="Report - ReflectOS", page_icon="📊", layout="wi
 st.title("📊 Weekly Report")
 st.caption("AI가 생성하는 주간 회고 리포트")
 
+# === 사이드바: 데모 데이터 제외 토글 ===
+with st.sidebar:
+    exclude_demo = st.checkbox(
+        "🧪 데모 데이터 제외",
+        value=st.session_state.get("exclude_demo", True)
+    )
+    st.session_state["exclude_demo"] = exclude_demo
+
 
 # === 주간 리포트 생성 함수 ===
 def generate_weekly_report_json(checkins: List[Dict], extractions: List[Dict]) -> Optional[Dict]:
@@ -197,7 +205,8 @@ if st.button("📝 리포트 생성", use_container_width=True, type="primary"):
             # 체크인 조회
             checkins = get_checkins_date_range(
                 start_date=start_date.isoformat(),
-                end_date=end_date.isoformat()
+                end_date=end_date.isoformat(),
+                exclude_demo=st.session_state.get("exclude_demo", True)
             )
             
             if not checkins:
