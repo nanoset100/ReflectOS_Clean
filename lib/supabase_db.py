@@ -73,7 +73,8 @@ def insert_checkin(
     mood: str = "neutral",
     tags: List[str] = None,
     metadata: Dict = None,
-    user_id: str = None
+    user_id: str = None,
+    created_at: Optional[str] = None  # 데모 데이터용 옵션 인자
 ) -> Optional[Dict]:
     """
     새 체크인 저장
@@ -84,6 +85,7 @@ def insert_checkin(
         tags: 태그 목록 (리스트)
         metadata: 추가 메타데이터 (energy 등)
         user_id: 사용자 ID (기본값: 현재 사용자)
+        created_at: 생성 시간 (옵션, 없으면 현재 시간)
     
     Returns:
         저장된 체크인 레코드
@@ -98,7 +100,7 @@ def insert_checkin(
             "mood": mood,
             "tags": tags or [],
             "metadata": metadata or {},
-            "created_at": datetime.utcnow().isoformat()
+            "created_at": created_at if created_at else datetime.utcnow().isoformat()
         }
         
         response = client.table("checkins").insert(data).execute()
@@ -173,7 +175,8 @@ def insert_extraction(
     source_id: str,
     extraction_type: str,
     data: Dict,
-    user_id: str = None
+    user_id: str = None,
+    created_at: Optional[str] = None  # 데모 데이터용 옵션 인자
 ) -> Optional[Dict]:
     """
     추출 데이터 저장 (규칙 기반 또는 LLM 기반)
@@ -184,6 +187,7 @@ def insert_extraction(
         extraction_type: 추출 타입 ('rule_based', 'llm_extractor', 'keywords' 등)
         data: 추출된 데이터 (JSON)
         user_id: 사용자 ID
+        created_at: 생성 시간 (옵션, 없으면 현재 시간)
     
     Returns:
         저장된 extraction 레코드
@@ -198,7 +202,7 @@ def insert_extraction(
             "source_id": source_id,
             "extraction_type": extraction_type,
             "data": data,
-            "created_at": datetime.utcnow().isoformat()
+            "created_at": created_at if created_at else datetime.utcnow().isoformat()
         }
         
         response = client.table("extractions").insert(record).execute()

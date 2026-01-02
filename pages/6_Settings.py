@@ -321,6 +321,71 @@ default_timezone = "Asia/Seoul"
 st.divider()
 st.subheader("🗃️ 데이터 관리")
 
+# --- 데모 데이터 섹션 (위험 구역 위에 배치) ---
+st.markdown("#### 🎬 데모 데이터")
+st.caption("테스트용 7일치 체크인 데이터를 생성합니다.")
+
+demo_col1, demo_col2 = st.columns(2)
+
+with demo_col1:
+    demo_overwrite = st.checkbox(
+        "기존 데모 데이터 삭제 후 재생성",
+        value=True,
+        key="demo_overwrite"
+    )
+    
+    if st.button("📦 데모 데이터 7일 생성", use_container_width=True, type="primary"):
+        try:
+            from lib.demo_data import seed_demo_data
+            
+            with st.spinner("🔄 데모 데이터 생성 중... (임베딩 포함)"):
+                result = seed_demo_data(
+                    days=7,
+                    overwrite=demo_overwrite,
+                    also_index=True
+                )
+            
+            if result.get("errors"):
+                for err in result["errors"][:3]:  # 최대 3개만 표시
+                    st.warning(f"⚠️ {err}")
+            
+            st.success(
+                f"✅ 생성 완료!\n\n"
+                f"- 삭제된 체크인: {result.get('deleted_demo_checkins', 0)}개\n"
+                f"- 생성된 체크인: {result.get('inserted_checkins', 0)}개\n"
+                f"- 생성된 추출: {result.get('inserted_extractions', 0)}개\n"
+                f"- 인덱싱 완료: {result.get('indexed', 0)}개"
+            )
+            
+        except Exception as e:
+            st.error(f"오류 발생: {e}")
+
+with demo_col2:
+    st.caption("데모 태그(`__demo__`)가 있는 체크인만 삭제합니다.")
+    
+    if st.button("🧹 데모 데이터만 삭제", use_container_width=True):
+        try:
+            from lib.demo_data import delete_demo_data
+            
+            with st.spinner("🗑️ 데모 데이터 삭제 중..."):
+                result = delete_demo_data()
+            
+            if result.get("errors"):
+                for err in result["errors"][:3]:
+                    st.warning(f"⚠️ {err}")
+            
+            st.success(
+                f"✅ 삭제 완료!\n\n"
+                f"- 삭제된 체크인: {result.get('deleted_checkins', 0)}개\n"
+                f"- 삭제된 추출: {result.get('deleted_extractions', 0)}개\n"
+                f"- 삭제된 임베딩: {result.get('deleted_embeddings', 0)}개"
+            )
+            
+        except Exception as e:
+            st.error(f"오류 발생: {e}")
+
+st.divider()
+
 with st.expander("⚠️ 위험 구역"):
     st.warning("아래 작업은 되돌릴 수 없습니다!")
     
