@@ -75,6 +75,179 @@ def extract_by_rules(content: str) -> Dict[str, List[str]]:
     }
 
 
+# === 멀티모달 입력 섹션 렌더링 함수 ===
+def render_multimodal_section():
+    """
+    멀티모달 입력(음성/이미지) 섹션을 렌더링하는 함수
+    저장 버튼 이후 페이지 하단에 배치됨
+    """
+    st.divider()
+    st.subheader("🎙️ 멀티모달 입력")
+    
+    tab_audio, tab_image = st.tabs(["🎤 음성 입력", "🖼️ 이미지 입력"])
+    
+    # --- 음성 입력 탭 (Step 4) ---
+    with tab_audio:
+        st.markdown("**음성 파일을 업로드하면 텍스트로 변환됩니다**")
+        
+        audio_file = st.file_uploader(
+            "음성 파일 선택",
+            type=["mp3", "wav", "m4a", "ogg", "webm", "flac"],
+            key="audio_uploader",
+            help="지원 형식: MP3, WAV, M4A, OGG, WebM, FLAC"
+        )
+        
+        if audio_file is not None:
+            # 오디오 미리보기
+            st.audio(audio_file, format=f"audio/{audio_file.type.split('/')[-1] if audio_file.type else 'mpeg'}")
+            
+            if st.button("🎯 음성 → 텍스트 변환", key="transcribe_btn"):
+                with st.spinner("🔄 음성을 텍스트로 변환 중..."):
+                    try:
+                        from lib.openai_client import transcribe_audio_bytes
+                        
+                        # 파일 정보 추출
+                        audio_bytes = audio_file.getvalue()
+                        filename = audio_file.name
+                        mimetype = audio_file.type  # Streamlit이 제공하는 MIME 타입
+                        
+                        # STT 호출 (3-tuple 방식, 내부에서 정규화)
+                        transcribed = transcribe_audio_bytes(
+                            audio_bytes=audio_bytes,
+                            filename=filename,
+                            mimetype=mimetype,
+                            language="ko"
+                        )
+                        
+                        st.session_state.transcribed_text = transcribed
+                        st.success("✅ 음성 변환 완료!")
+                            
+                    except ImportError as e:
+                        st.error(f"모듈 로드 실패: {e}")
+                    except RuntimeError as e:
+                        # STT 상세 에러 표시 (디버깅용)
+                        st.error(f"🔴 STT 실패: {e}")
+                    except Exception as e:
+                        st.error(f"음성 변환 오류: {e}")
+        
+        # 전사된 텍스트 표시 및 편집
+        if st.session_state.transcribed_text:
+            st.markdown("---")
+            st.markdown("**📝 변환된 텍스트** (편집 가능)")
+            edited_transcription = st.text_area(
+                "전사 결과",
+                value=st.session_state.transcribed_text,
+                height=100,
+                key="edit_transcription",
+                label_visibility="collapsed"
+            )
+            st.session_state.transcribed_text = edited_transcription
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("📋 본문에 추가", key="add_transcription"):
+                    st.session_state.add_to_content = st.session_state.transcribed_text
+                    st.success("본문에 추가됨! 아래 내용란을 확인하세요.")
+            with col2:
+                if st.button("🗑️ 전사 내용 삭제", key="clear_transcription"):
+                    st.session_state.transcribed_text = ""
+                    st.rerun()
+    
+    
+    # --- 이미지 입력 탭 (Step 5) ---
+    with tab_image:
+        st.markdown("**이미지를 업로드하면 AI가 내용을 분석합니다**")
+        
+        image_file = st.file_uploader(
+            "이미지 파일 선택",
+            type=["png", "jpg", "jpeg", "webp"],
+            key="image_uploader",
+            help="지원 형식: PNG, JPG, JPEG, WebP"
+        )
+        
+        if image_file is not None:
+            # 이미지 미리보기
+            st.image(image_file, caption="업로드된 이미지", use_container_width=True)
+            
+            if st.button("🔍 이미지 분석", key="analyze_image_btn"):
+                with st.spinner("🔄 이미지 분석 중..."):
+                    try:
+                        from lib.openai_client import analyze_image
+                        from lib.supabase_storage import upload_file, get_public_url
+                        import base64
+                        
+                        # 1. Supabase Storage에 업로드
+                        file_bytes = image_file.getvalue()
+                        content_type = image_file.type or "image/jpeg"
+                        
+                        storage_path = upload_file(
+                            file_data=file_bytes,
+                            file_name=image_file.name,
+                            content_type=content_type,
+                            folder="images"
+                        )
+                        
+                        # 2. Base64로 인코딩하여 Vision API 호출
+                        base64_image = base64.b64encode(file_bytes).decode('utf-8')
+                        image_url = f"data:{content_type};base64,{base64_image}"
+                        
+                        # 분석 프롬프트
+                        analysis_prompt = """이 이미지에서 다음을 추출해주세요:
+1. 이미지에 보이는 텍스트/메모 내용
+2. 할 일 목록이 있다면 추출
+3. 전체적인 맥락 요약 (한 문장)
+
+간결하게 요점만 정리해주세요."""
+                        
+                        analysis_result = analyze_image(image_url, analysis_prompt)
+                        
+                        if analysis_result:
+                            st.session_state.image_analysis = analysis_result
+                            
+                            # artifacts 정보 저장
+                            st.session_state.uploaded_artifacts.append({
+                                "type": "image",
+                                "storage_path": storage_path,
+                                "original_name": image_file.name,
+                                "file_size": len(file_bytes),
+                                "metadata": {
+                                    "analysis": analysis_result
+                                }
+                            })
+                            
+                            st.success("✅ 이미지 분석 완료!")
+                        else:
+                            st.error("이미지 분석에 실패했습니다.")
+                            
+                    except ImportError as e:
+                        st.error(f"모듈 로드 실패: {e}")
+                    except Exception as e:
+                        st.error(f"오류 발생: {e}")
+        
+        # 분석 결과 표시 및 편집
+        if st.session_state.image_analysis:
+            st.markdown("---")
+            st.markdown("**📝 분석 결과** (편집 가능)")
+            edited_analysis = st.text_area(
+                "분석 결과",
+                value=st.session_state.image_analysis,
+                height=100,
+                key="edit_analysis",
+                label_visibility="collapsed"
+            )
+            st.session_state.image_analysis = edited_analysis
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("📋 본문에 추가", key="add_analysis"):
+                    st.session_state.add_to_content = st.session_state.image_analysis
+                    st.success("본문에 추가됨! 아래 내용란을 확인하세요.")
+            with col2:
+                if st.button("🗑️ 분석 내용 삭제", key="clear_analysis"):
+                    st.session_state.image_analysis = ""
+                    st.rerun()
+
+
 st.title("✍️ Check-in")
 st.caption("오늘의 생각과 감정을 기록하세요")
 
@@ -113,192 +286,6 @@ with st.sidebar:
     st.divider()
     st.caption("💡 LLM 미사용 시 규칙 기반으로 추출")
 
-
-# === 멀티모달 입력 섹션 (Step 4, 5) ===
-st.subheader("🎙️ 멀티모달 입력")
-
-tab_audio, tab_image = st.tabs(["🎤 음성 입력", "🖼️ 이미지 입력"])
-
-# --- 음성 입력 탭 (Step 4) ---
-with tab_audio:
-    st.markdown("**음성 파일을 업로드하면 텍스트로 변환됩니다**")
-    
-    audio_file = st.file_uploader(
-        "음성 파일 선택",
-        type=["mp3", "wav", "m4a", "ogg", "webm"],
-        key="audio_uploader",
-        help="지원 형식: MP3, WAV, M4A, OGG, WebM"
-    )
-    
-    if audio_file is not None:
-        # 오디오 미리보기
-        st.audio(audio_file, format=f"audio/{audio_file.type.split('/')[-1]}")
-        
-        if st.button("🎯 음성 → 텍스트 변환", key="transcribe_btn"):
-            with st.spinner("🔄 음성을 텍스트로 변환 중..."):
-                try:
-                    from lib.openai_client import transcribe_audio
-                    from lib.supabase_storage import upload_file
-                    from lib.supabase_db import insert_artifact
-                    
-                    # 1. Supabase Storage에 업로드
-                    file_bytes = audio_file.getvalue()
-                    content_type = audio_file.type or "audio/mpeg"
-                    
-                    storage_path = upload_file(
-                        file_data=file_bytes,
-                        file_name=audio_file.name,
-                        content_type=content_type,
-                        folder="audio"
-                    )
-                    
-                    # 2. OpenAI Whisper로 전사
-                    audio_file.seek(0)  # 파일 포인터 리셋
-                    transcribed = transcribe_audio(audio_file, language="ko")
-                    
-                    if transcribed:
-                        st.session_state.transcribed_text = transcribed
-                        
-                        # artifacts 정보 저장 (체크인 저장 시 DB에 기록)
-                        st.session_state.uploaded_artifacts.append({
-                            "type": "audio",
-                            "storage_path": storage_path,
-                            "original_name": audio_file.name,
-                            "file_size": len(file_bytes),
-                            "metadata": {
-                                "transcription": transcribed,
-                                "duration": None  # 향후 추가 가능
-                            }
-                        })
-                        
-                        st.success("✅ 음성 변환 완료!")
-                    else:
-                        st.error("음성 변환에 실패했습니다.")
-                        
-                except ImportError as e:
-                    st.error(f"모듈 로드 실패: {e}")
-                except Exception as e:
-                    st.error(f"오류 발생: {e}")
-    
-    # 전사된 텍스트 표시 및 편집
-    if st.session_state.transcribed_text:
-        st.markdown("---")
-        st.markdown("**📝 변환된 텍스트** (편집 가능)")
-        edited_transcription = st.text_area(
-            "전사 결과",
-            value=st.session_state.transcribed_text,
-            height=100,
-            key="edit_transcription",
-            label_visibility="collapsed"
-        )
-        st.session_state.transcribed_text = edited_transcription
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("📋 본문에 추가", key="add_transcription"):
-                st.session_state.add_to_content = st.session_state.transcribed_text
-                st.success("본문에 추가됨! 아래 내용란을 확인하세요.")
-        with col2:
-            if st.button("🗑️ 전사 내용 삭제", key="clear_transcription"):
-                st.session_state.transcribed_text = ""
-                st.rerun()
-
-
-# --- 이미지 입력 탭 (Step 5) ---
-with tab_image:
-    st.markdown("**이미지를 업로드하면 AI가 내용을 분석합니다**")
-    
-    image_file = st.file_uploader(
-        "이미지 파일 선택",
-        type=["png", "jpg", "jpeg", "webp"],
-        key="image_uploader",
-        help="지원 형식: PNG, JPG, JPEG, WebP"
-    )
-    
-    if image_file is not None:
-        # 이미지 미리보기
-        st.image(image_file, caption="업로드된 이미지", use_container_width=True)
-        
-        if st.button("🔍 이미지 분석", key="analyze_image_btn"):
-            with st.spinner("🔄 이미지 분석 중..."):
-                try:
-                    from lib.openai_client import analyze_image
-                    from lib.supabase_storage import upload_file, get_public_url
-                    import base64
-                    
-                    # 1. Supabase Storage에 업로드
-                    file_bytes = image_file.getvalue()
-                    content_type = image_file.type or "image/jpeg"
-                    
-                    storage_path = upload_file(
-                        file_data=file_bytes,
-                        file_name=image_file.name,
-                        content_type=content_type,
-                        folder="images"
-                    )
-                    
-                    # 2. Base64로 인코딩하여 Vision API 호출
-                    base64_image = base64.b64encode(file_bytes).decode('utf-8')
-                    image_url = f"data:{content_type};base64,{base64_image}"
-                    
-                    # 분석 프롬프트
-                    analysis_prompt = """이 이미지에서 다음을 추출해주세요:
-1. 이미지에 보이는 텍스트/메모 내용
-2. 할 일 목록이 있다면 추출
-3. 전체적인 맥락 요약 (한 문장)
-
-간결하게 요점만 정리해주세요."""
-                    
-                    analysis_result = analyze_image(image_url, analysis_prompt)
-                    
-                    if analysis_result:
-                        st.session_state.image_analysis = analysis_result
-                        
-                        # artifacts 정보 저장
-                        st.session_state.uploaded_artifacts.append({
-                            "type": "image",
-                            "storage_path": storage_path,
-                            "original_name": image_file.name,
-                            "file_size": len(file_bytes),
-                            "metadata": {
-                                "analysis": analysis_result
-                            }
-                        })
-                        
-                        st.success("✅ 이미지 분석 완료!")
-                    else:
-                        st.error("이미지 분석에 실패했습니다.")
-                        
-                except ImportError as e:
-                    st.error(f"모듈 로드 실패: {e}")
-                except Exception as e:
-                    st.error(f"오류 발생: {e}")
-    
-    # 분석 결과 표시 및 편집
-    if st.session_state.image_analysis:
-        st.markdown("---")
-        st.markdown("**📝 분석 결과** (편집 가능)")
-        edited_analysis = st.text_area(
-            "분석 결과",
-            value=st.session_state.image_analysis,
-            height=100,
-            key="edit_analysis",
-            label_visibility="collapsed"
-        )
-        st.session_state.image_analysis = edited_analysis
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("📋 본문에 추가", key="add_analysis"):
-                st.session_state.add_to_content = st.session_state.image_analysis
-                st.success("본문에 추가됨! 아래 내용란을 확인하세요.")
-        with col2:
-            if st.button("🗑️ 분석 내용 삭제", key="clear_analysis"):
-                st.session_state.image_analysis = ""
-                st.rerun()
-
-
-st.divider()
 
 # === 체크인 폼 ===
 with st.form("checkin_form"):
@@ -565,3 +552,7 @@ with st.form("checkin_form"):
                     st.info(f"💬 AI: {ai_reflection}")
             except Exception as e:
                 st.error(f"오류 발생: {e}")
+
+
+# === 멀티모달 입력 섹션 (저장 이후 하단에 배치) ===
+render_multimodal_section()

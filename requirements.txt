@@ -1,8 +1,12 @@
-# ReflectOS MVP - Requirements
+# FaithLoop (ReflectOS 파생) - Requirements
 # Python 3.10+ 권장
 
 # === Core Framework ===
 streamlit>=1.31.0
+
+# === FastAPI (API 서버) ===
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
 
 # === Database & Storage ===
 supabase>=2.3.0
