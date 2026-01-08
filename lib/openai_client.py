@@ -311,6 +311,84 @@ def transcribe_audio(
         return None
 
 
+def _safe_audio_filename(original_name: str) -> str:
+    """
+    OpenAI Whisper API에서 지원하는 확장자로 파일명 정리
+    
+    Args:
+        original_name: 원본 파일명
+    
+    Returns:
+        안전한 파일명 (지원 형식: flac, m4a, mp3, mp4, mpeg, mpga, oga, ogg, wav, webm)
+    """
+    import os
+    name, ext = os.path.splitext(original_name.lower())
+    
+    # 지원 확장자 매핑
+    supported_extensions = {
+        ".flac": ".flac",
+        ".m4a": ".m4a",
+        ".mp3": ".mp3",
+        ".mp4": ".mp4",
+        ".mpeg": ".mpeg",
+        ".mpga": ".mpga",
+        ".oga": ".oga",
+        ".ogg": ".ogg",
+        ".wav": ".wav",
+        ".webm": ".webm",
+    }
+    
+    # 지원되는 확장자면 그대로 사용, 아니면 mp3로 대체
+    safe_ext = supported_extensions.get(ext, ".mp3")
+    
+    # 파일명에 한글/특수문자 있으면 간단히 변환
+    safe_name = "audio_upload"
+    
+    return safe_name + safe_ext
+
+
+def transcribe_audio_bytes(
+    file_bytes: bytes,
+    original_filename: str,
+    language: str = "ko"
+) -> Optional[str]:
+    """
+    바이트 데이터로 음성을 텍스트로 변환 (Whisper) - Storage 업로드 불필요
+    
+    Args:
+        file_bytes: 오디오 파일의 바이트 데이터
+        original_filename: 원본 파일명 (확장자 추출용)
+        language: 언어 코드
+    
+    Returns:
+        변환된 텍스트
+    """
+    import io
+    
+    try:
+        client = get_openai_client()
+        if not client:
+            st.warning("OpenAI API 키가 설정되지 않았습니다.")
+            return None
+        
+        # BytesIO로 파일 객체 생성 + .name 속성 강제 설정
+        safe_filename = _safe_audio_filename(original_filename)
+        audio_buffer = io.BytesIO(file_bytes)
+        audio_buffer.name = safe_filename  # OpenAI API에서 확장자 확인용
+        
+        response = client.audio.transcriptions.create(
+            model="whisper-1",
+            file=audio_buffer,
+            language=language
+        )
+        
+        return response.text
+        
+    except Exception as e:
+        st.error(f"음성 변환 실패: {e}")
+        return None
+
+
 def analyze_image(
     image_url: str,
     prompt: str = "이 이미지를 설명해주세요."
