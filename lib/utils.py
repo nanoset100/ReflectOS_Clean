@@ -5,8 +5,7 @@ ReflectOS - 유틸리티 함수
 from datetime import datetime, timedelta
 from typing import List, Optional
 import re
-import matplotlib.pyplot as plt
-import matplotlib
+# matplotlib은 lazy import로 변경 (setup_korean_font 함수 내부에서만 import)
 import platform
 
 # 데모 데이터 구분 태그 상수
@@ -16,34 +15,44 @@ DEMO_TAG = "__demo__"
 def setup_korean_font():
     """Matplotlib에서 한글 폰트를 설정합니다.
     서버 환경에서도 동작하도록 여러 폰트 후보를 시도합니다.
+    Lazy import로 변경하여 matplotlib이 필요할 때만 로드됩니다.
+    matplotlib 미설치/폰트 미존재 환경에서도 앱이 죽지 않도록 try-except 처리.
+    
+    Returns:
+        bool: 폰트 설정 성공 여부
     """
-    # 한글 폰트 후보 리스트
-    font_candidates = [
-        "Noto Sans CJK KR",
-        "NanumGothic",
-        "Malgun Gothic",
-        "DejaVu Sans"
-    ]
-    
-    # 시스템에 설치된 폰트 목록 확인
-    available_fonts = set(f.name for f in matplotlib.font_manager.fontManager.ttflist)
-    
-    # 사용 가능한 첫 번째 폰트 선택
-    font_name = None
-    for candidate in font_candidates:
-        if candidate in available_fonts:
-            font_name = candidate
-            break
-    
-    # 폰트가 없으면 기본값 사용
-    if font_name is None:
-        font_name = "DejaVu Sans"
-    
-    # matplotlib 폰트 설정
-    plt.rcParams['font.family'] = font_name
-    
-    # 음수 기호 설정 (마이너스 기호 유니코드 문제 해결)
-    plt.rcParams['axes.unicode_minus'] = False
+    try:
+        # Lazy import: 함수 내부에서만 import
+        import matplotlib
+        import matplotlib.pyplot as plt
+        import matplotlib.font_manager as fm
+        
+        # 한글 폰트 후보 리스트
+        font_candidates = [
+            "NanumGothic",
+            "Malgun Gothic",
+            "AppleGothic",
+            "Noto Sans CJK KR",
+            "Noto Sans KR"
+        ]
+        
+        # 시스템에 설치된 폰트 목록 확인
+        available_fonts = set(f.name for f in fm.fontManager.ttflist)
+        
+        # 사용 가능한 첫 번째 폰트 선택
+        for name in font_candidates:
+            if name in available_fonts:
+                plt.rcParams["font.family"] = name
+                plt.rcParams["axes.unicode_minus"] = False
+                return True
+        
+        # 폰트가 없으면 기본값 사용 (앱은 계속 동작)
+        plt.rcParams["font.family"] = "DejaVu Sans"
+        plt.rcParams["axes.unicode_minus"] = False
+        return False
+    except Exception:
+        # matplotlib 미설치/폰트 미존재 환경에서도 앱이 죽지 않게
+        return False
 
 
 def has_demo_tag(tags):
