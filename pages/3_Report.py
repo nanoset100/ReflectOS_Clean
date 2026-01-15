@@ -6,8 +6,11 @@ Step 7: RAG 기반 주간 분석 + wins/issues/patterns/next_experiments
 import streamlit as st
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
+from lib.auth import get_current_user
 
-st.set_page_config(page_title="Report - ReflectOS", page_icon="📊", layout="wide")
+# 사용자 정보 가져오기
+user = get_current_user()
+user_id = user.id
 
 st.title("📊 Weekly Report")
 st.caption("AI가 생성하는 주간 회고 리포트")

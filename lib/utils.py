@@ -5,9 +5,45 @@ ReflectOS - 유틸리티 함수
 from datetime import datetime, timedelta
 from typing import List, Optional
 import re
+import matplotlib.pyplot as plt
+import matplotlib
+import platform
 
 # 데모 데이터 구분 태그 상수
 DEMO_TAG = "__demo__"
+
+
+def setup_korean_font():
+    """Matplotlib에서 한글 폰트를 설정합니다.
+    서버 환경에서도 동작하도록 여러 폰트 후보를 시도합니다.
+    """
+    # 한글 폰트 후보 리스트
+    font_candidates = [
+        "Noto Sans CJK KR",
+        "NanumGothic",
+        "Malgun Gothic",
+        "DejaVu Sans"
+    ]
+    
+    # 시스템에 설치된 폰트 목록 확인
+    available_fonts = set(f.name for f in matplotlib.font_manager.fontManager.ttflist)
+    
+    # 사용 가능한 첫 번째 폰트 선택
+    font_name = None
+    for candidate in font_candidates:
+        if candidate in available_fonts:
+            font_name = candidate
+            break
+    
+    # 폰트가 없으면 기본값 사용
+    if font_name is None:
+        font_name = "DejaVu Sans"
+    
+    # matplotlib 폰트 설정
+    plt.rcParams['font.family'] = font_name
+    
+    # 음수 기호 설정 (마이너스 기호 유니코드 문제 해결)
+    plt.rcParams['axes.unicode_minus'] = False
 
 
 def has_demo_tag(tags):

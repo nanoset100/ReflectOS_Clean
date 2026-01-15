@@ -5,8 +5,11 @@ Step 9: Google Calendar OAuth 연결
 """
 import streamlit as st
 from urllib.parse import parse_qs, urlparse
+from lib.auth import get_current_user
 
-st.set_page_config(page_title="Settings - ReflectOS", page_icon="⚙️", layout="wide")
+# 사용자 정보 가져오기
+user = get_current_user()
+user_id = user.id
 
 st.title("⚙️ Settings")
 st.caption("연동 및 환경 설정을 관리하세요")
@@ -108,6 +111,61 @@ with col3:
 
 st.divider()
 
+# === DB 상태 체크 ===
+st.subheader("🗄️ DB 상태 확인")
+
+try:
+    from lib.config import get_supabase_client
+    
+    client = get_supabase_client()
+    
+    if client:
+        if st.button("🔍 module_entries 테이블 확인", use_container_width=True):
+            with st.spinner("테이블 존재 여부 확인 중..."):
+                try:
+                    # 테이블 조회로 확인 (간접적 방법)
+                    try:
+                        test_query = client.table("module_entries").select("id").limit(1).execute()
+                        st.success("✅ module_entries 테이블이 존재하고 정상 작동 중입니다.")
+                        st.caption("테이블이 schema cache에 등록되어 있습니다.")
+                    except Exception as e:
+                        error_str = str(e)
+                        if "PGRST205" in error_str or "schema cache" in error_str.lower():
+                            st.error("❌ 테이블이 schema cache에 없습니다.")
+                            st.warning("""
+                            **해결 방법:**
+                            
+                            1. Supabase SQL Editor에서 `sql/reload_pgrst_schema.sql` 실행
+                            2. 앱을 새로고침하거나 재시작
+                            """)
+                        elif "permission" in error_str.lower() or "row-level security" in error_str.lower():
+                            st.warning("⚠️ 테이블은 존재하지만 접근 권한이 없습니다.")
+                            st.caption("RLS 정책을 확인하세요.")
+                        else:
+                            st.error(f"❌ 테이블 확인 실패: {error_str}")
+                            
+                except Exception as e:
+                    st.error(f"❌ 확인 중 오류 발생: {e}")
+                    st.info("""
+                    **수동 확인 방법:**
+                    
+                    Supabase SQL Editor에서 다음을 실행하세요:
+                    ```sql
+                    SELECT to_regclass('public.module_entries') AS module_entries;
+                    ```
+                    
+                    - 결과가 `public.module_entries`: 테이블 존재
+                    - 결과가 `NULL`: 테이블 없음 → `sql/module_entries.sql` 실행 필요
+                    """)
+    else:
+        st.warning("⚠️ Supabase 연결이 필요합니다.")
+        
+except Exception as e:
+    st.error(f"DB 상태 확인 오류: {e}")
+
+
+st.divider()
+
 # === Google Calendar 연동 ===
 st.subheader("📅 Google Calendar 연동")
 
@@ -201,6 +259,49 @@ except ImportError as e:
     st.info("필요한 패키지: google-api-python-client, google-auth-oauthlib")
 except Exception as e:
     st.error(f"오류 발생: {e}")
+
+
+st.divider()
+
+# === 모듈 활성화 설정 ===
+st.subheader("🔌 모듈 활성화")
+
+try:
+    from lib.modules import MODULE_REGISTRY, get_active_modules, set_active_modules
+    
+    # 현재 활성 모듈 로드
+    current_active = get_active_modules(user_id)
+    
+    st.caption("사용할 모듈을 선택하세요. 선택한 모듈이 메뉴에 표시됩니다.")
+    
+    # 모듈별 체크박스
+    selected_modules = []
+    for module_id, module_info in MODULE_REGISTRY.items():
+        is_active = module_id in current_active
+        checked = st.checkbox(
+            f"{module_info['icon']} {module_info['name']}",
+            value=is_active,
+            help=module_info['description'],
+            key=f"module_{module_id}"
+        )
+        if checked:
+            selected_modules.append(module_id)
+    
+    # 저장 버튼
+    if st.button("💾 모듈 설정 저장", use_container_width=True, type="primary"):
+        try:
+            success = set_active_modules(user_id, selected_modules)
+            if success:
+                st.success("✅ 모듈 설정이 저장되었습니다!")
+                st.info("페이지를 새로고침하면 메뉴가 업데이트됩니다.")
+                st.rerun()  # 메뉴 즉시 갱신
+            else:
+                st.error("❌ 저장에 실패했습니다.")
+        except Exception as e:
+            st.error(f"❌ 저장 중 오류 발생: {e}")
+    
+except Exception as e:
+    st.error(f"모듈 설정 로드 오류: {e}")
 
 
 st.divider()
@@ -348,6 +449,21 @@ try:
         
 except Exception as e:
     st.error(f"AI 자동화 설정 로드 오류: {e}")
+
+
+# === 계정 관리 ===
+st.divider()
+st.subheader("🚪 계정 관리")
+
+col1, col2 = st.columns(2)
+with col1:
+    st.info(f"로그인: {user.email}")
+with col2:
+    if st.button("🚪 로그아웃", type="primary", use_container_width=True):
+        from lib.auth import logout
+        logout()
+        st.success("로그아웃되었습니다.")
+        st.rerun()
 
 
 # === 데이터 관리 ===

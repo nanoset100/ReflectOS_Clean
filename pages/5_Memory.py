@@ -5,8 +5,11 @@ Step 6: 벡터 검색 + 소스 표시
 """
 import streamlit as st
 from datetime import datetime
+from lib.auth import get_current_user
 
-st.set_page_config(page_title="Memory - ReflectOS", page_icon="🧠", layout="wide")
+# 사용자 정보 가져오기
+user = get_current_user()
+user_id = user.id
 
 st.title("🧠 Memory Search")
 st.caption("AI가 과거 기록에서 관련 내용을 찾아 답변합니다")

@@ -7,8 +7,11 @@ import streamlit as st
 from datetime import datetime, timedelta, time
 from typing import Dict, List, Optional
 import json
+from lib.auth import get_current_user
 
-st.set_page_config(page_title="Planner - ReflectOS", page_icon="📅", layout="wide")
+# 사용자 정보 가져오기
+user = get_current_user()
+user_id = user.id
 
 st.title("📅 Time Block Planner")
 st.caption("AI가 제안하는 최적의 시간블록 계획")

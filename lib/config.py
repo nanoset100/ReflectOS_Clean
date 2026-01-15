@@ -30,6 +30,8 @@ def get_supabase_client() -> Client:
     """
     Supabase 클라이언트 싱글톤 반환
     @st.cache_resource로 앱 전체에서 재사용
+    
+    로그인 세션이 있으면 세션을 적용하여 RLS가 작동하도록 함
     """
     url = get_supabase_url()
     key = get_supabase_key()
@@ -39,6 +41,21 @@ def get_supabase_client() -> Client:
     
     try:
         client = create_client(url, key)
+        
+        # 세션이 있으면 적용 (RLS 작동을 위해 필수)
+        from lib.auth import get_access_refresh_tokens
+        tokens = get_access_refresh_tokens()
+        
+        if tokens:
+            access_token, refresh_token = tokens
+            try:
+                # 문자열 토큰 2개를 직접 전달 (올바른 형태)
+                client.auth.set_session(access_token, refresh_token)
+            except Exception as e:
+                # 세션 적용 실패 시 로그만 남기고 계속 진행
+                # (anon client로 동작)
+                pass
+        
         return client
     except Exception as e:
         st.error(f"❌ Supabase 연결 실패: {e}")
@@ -79,12 +96,14 @@ def get_app_config() -> dict:
         }
 
 
-# === 현재 사용자 ID (MVP: 단일 사용자) ===
+# === 현재 사용자 ID (인증 기반) ===
 def get_current_user_id() -> str:
     """
     현재 사용자 ID 반환
-    MVP에서는 고정 ID 사용, 추후 인증 연동시 수정
+    세션에 저장된 user_id를 반환, 없으면 None
     """
-    # TODO: 실제 인증 구현 시 session_state에서 가져오기
-    return "default-user-id"
+    if "user_id" in st.session_state:
+        return st.session_state["user_id"]
+    
+    return None
 

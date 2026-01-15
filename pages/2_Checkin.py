@@ -10,8 +10,11 @@ import streamlit as st
 import re
 from typing import Dict, List, Optional
 from datetime import datetime
+from lib.auth import get_current_user
 
-st.set_page_config(page_title="Check-in - ReflectOS", page_icon="✍️", layout="wide")
+# 사용자 정보 가져오기
+user = get_current_user()
+user_id = user.id
 
 
 # === 자동 인덱싱 토글 값 로드 ===
