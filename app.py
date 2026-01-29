@@ -51,9 +51,19 @@ if user is None or getattr(user, "id", None) is None:
 user_id = user.id
 user_email = getattr(user, 'email', 'unknown')
 
-# 활성 모듈 로드
-active_modules = get_active_modules(user_id)
-logger.info(f"[APP] 앱 초기화: user_id={user_id}, email={user_email}, active_modules={active_modules}")
+# 활성 모듈 로드 (안전하게 처리)
+try:
+    active_modules = get_active_modules(user_id)
+    # active_modules가 리스트가 아니면 빈 리스트로 초기화
+    if not isinstance(active_modules, list):
+        logger.warning(f"[APP] active_modules가 리스트가 아님: {type(active_modules)}, {active_modules}. 빈 리스트로 초기화.")
+        active_modules = []
+    # 레지스트리에 없는 모듈 제거
+    active_modules = [m for m in active_modules if m in MODULE_REGISTRY]
+    logger.info(f"[APP] 앱 초기화: user_id={user_id}, email={user_email}, active_modules={active_modules}")
+except Exception as e:
+    logger.error(f"[APP] 활성 모듈 로드 실패: {e}. 빈 리스트로 초기화.")
+    active_modules = []
 
 # === 네비게이션 페이지 구성 ===
 pages = []
@@ -115,6 +125,26 @@ if not hasattr(st.session_state, "_env_logged"):
 # 설정 (항상 표시)
 pages.append(st.Page("pages/6_Settings.py", title="Settings", icon="⚙️"))
 
+# === pages 리스트 검증 (st.navigation 오류 방지) ===
+# None이나 잘못된 객체 제거
+valid_pages = []
+for i, page in enumerate(pages):
+    if page is None:
+        logger.warning(f"[APP] pages[{i}]가 None입니다. 건너뜁니다.")
+        continue
+    if not isinstance(page, st.Page):
+        logger.warning(f"[APP] pages[{i}]가 st.Page 객체가 아닙니다: {type(page)}. 건너뜁니다.")
+        continue
+    valid_pages.append(page)
+
+logger.info(f"[APP] 페이지 구성 완료: 총 {len(valid_pages)}개 (원본 {len(pages)}개)")
+
+# pages가 비어있으면 기본 페이지라도 추가
+if not valid_pages:
+    logger.error("[APP] 유효한 페이지가 없습니다! 기본 페이지를 추가합니다.")
+    valid_pages.append(st.Page("pages/1_Home.py", title="Home", icon="🏠"))
+    valid_pages.append(st.Page("pages/6_Settings.py", title="Settings", icon="⚙️"))
+
 # === 사이드바: 사용자 정보 + 로그아웃 ===
 with st.sidebar:
     st.title("🪞 ReflectOS")
@@ -130,6 +160,13 @@ with st.sidebar:
     
     st.divider()
 
-# === 네비게이션 실행 ===
-pg = st.navigation(pages)
-pg.run()
+# === 네비게이션 실행 (검증된 pages 사용) ===
+try:
+    pg = st.navigation(valid_pages)
+    pg.run()
+except Exception as e:
+    logger.error(f"[APP] st.navigation 오류: {e}")
+    logger.error(f"[APP] pages 리스트: {[str(p) for p in valid_pages]}")
+    st.error(f"❌ 페이지 로드 오류가 발생했습니다: {e}")
+    st.info("앱을 새로고침하거나 Settings에서 모듈 설정을 확인해주세요.")
+    st.stop()
