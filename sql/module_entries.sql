@@ -17,10 +17,11 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- 테이블 생성
+-- 테이블 생성 (CHECK 제약 포함)
 CREATE TABLE IF NOT EXISTS public.module_entries (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id TEXT NOT NULL,
-  module TEXT NOT NULL CHECK (module IN ('student', 'jobseeker', 'health')),
+  module TEXT NOT NULL,
   entry_type TEXT NOT NULL,
   occurred_on DATE NOT NULL,
   payload JSONB NOT NULL DEFAULT '{}',
@@ -29,6 +30,15 @@ CREATE TABLE IF NOT EXISTS public.module_entries (
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- CHECK 제약 추가 (student, jobseeker, health 모두 허용)
+-- 기존 제약이 있으면 제거 후 재생성
+ALTER TABLE public.module_entries
+DROP CONSTRAINT IF EXISTS module_entries_module_check;
+
+ALTER TABLE public.module_entries
+ADD CONSTRAINT module_entries_module_check 
+CHECK (module IN ('student', 'jobseeker', 'health'));
 
 -- 인덱스 생성 (IF NOT EXISTS는 인덱스에 직접 사용 불가, DROP 후 재생성)
 DROP INDEX IF EXISTS idx_module_entries_user_module;

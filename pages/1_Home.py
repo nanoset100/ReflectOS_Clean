@@ -106,9 +106,10 @@ try:
         else:
             st.info("아직 체크인 기록이 없습니다. **Check-in** 페이지에서 첫 기록을 남겨보세요!")
         
-        # === 활성 모듈 요약 ===
+        # === 활성 모듈 요약 (공통화) ===
         from lib.modules import get_active_modules, MODULE_REGISTRY
         from lib.supabase_db import get_module_entries
+        from lib.module_ui import render_module_summary_section
         from datetime import date, timedelta
         
         active_modules = get_active_modules(user_id)
@@ -117,53 +118,30 @@ try:
             st.divider()
             st.subheader("📦 모듈 기록")
             
-            # 건강 모듈 요약
-            if "health" in active_modules:
-                health_info = MODULE_REGISTRY["health"]
-                st.markdown(f"### {health_info['icon']} {health_info['name']}")
+            # 모든 활성 모듈에 대해 반복 처리
+            for module_id in active_modules:
+                if module_id not in MODULE_REGISTRY:
+                    continue
+                
+                module_info = MODULE_REGISTRY[module_id]
                 
                 # 최근 3개 기록 조회
                 recent_entries = get_module_entries(
                     user_id=user_id,
-                    module="health",
+                    module=module_id,
                     limit=3
                 )
                 
-                if recent_entries:
-                    for entry in recent_entries:
-                        occurred_on = entry.get("occurred_on", "")
-                        entry_type = entry.get("entry_type", "")
-                        payload = entry.get("payload", {})
-                        
-                        # 타입별 아이콘
-                        type_icons = {
-                            "meal": "🍽️",
-                            "exercise": "🏋️",
-                            "weight": "⚖️"
-                        }
-                        icon = type_icons.get(entry_type, "📝")
-                        
-                        # 내용 표시
-                        if entry_type == "meal":
-                            content = f"{payload.get('meal_type', '')}: {payload.get('content', '')}"
-                        elif entry_type == "exercise":
-                            content = f"{payload.get('exercise_type', '')} {payload.get('duration', 0)}분"
-                        elif entry_type == "weight":
-                            content = f"{payload.get('weight', 0)}kg"
-                        else:
-                            content = str(payload)
-                        
-                        col1, col2 = st.columns([1, 4])
-                        with col1:
-                            st.markdown(f"### {icon}")
-                            st.caption(occurred_on)
-                        with col2:
-                            st.markdown(content)
-                    
-                    if len(recent_entries) >= 3:
-                        st.caption("더 보려면 건강관리 메뉴를 확인하세요.")
-                else:
-                    st.caption("아직 기록이 없습니다. **오늘 기록** 페이지에서 첫 기록을 남겨보세요!")
+                # 모듈별 요약 섹션 렌더링
+                render_module_summary_section(
+                    module_id=module_id,
+                    module_info=module_info,
+                    recent_entries=recent_entries
+                )
+                
+                # 모듈 간 구분선
+                if module_id != active_modules[-1]:
+                    st.divider()
             
     else:
         st.warning("⚠️ Supabase 연결 설정이 필요합니다")

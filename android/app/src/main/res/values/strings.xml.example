@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    ReflectOS Android TWA - strings.xml
+    FaithLoop-Android를 기반으로 ReflectOS용으로 수정
+-->
+<resources>
+  <!--
+    This variable below expresses the relationship between the app and the site,
+    as documented in the TWA documentation at
+    https://developers.google.com/web/updates/2017/10/using-twa#set_up_digital_asset_links_in_an_android_app
+    and is injected into the AndroidManifest.xml
+  -->
+  <string name="assetStatements">
+    [{
+        \"relation\": [\"delegate_permission/common.handle_all_urls\"],
+        \"target\": {
+            \"namespace\": \"web\",
+            \"site\": \"https://reflectos-xxxx.streamlit.app\"  <!-- 변경: faithloop.streamlit.app → reflectos-xxxx.streamlit.app -->
+        }
+    }]
+  </string>
+</resources>

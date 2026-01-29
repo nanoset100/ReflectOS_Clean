@@ -1,0 +1,16 @@
+{
+  "name": "reflectos",
+  "version": "1.0.0",
+  "description": "ReflectOS - 개인 회고 & 시간 관리 MVP",
+  "main": "app.py",
+  "scripts": {
+    "start": "streamlit run app.py"
+  },
+  "keywords": [
+    "streamlit",
+    "reflectos",
+    "personal-reflection"
+  ],
+  "author": "",
+  "license": "MIT"
+}

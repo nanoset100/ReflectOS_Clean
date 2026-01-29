@@ -1,0 +1,48 @@
+// ReflectOS Android TWA - build.gradle 예시
+// 이 파일을 참고하여 실제 build.gradle을 수정하세요
+
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace = "com.reflectos.app"
+    compileSdk = 34
+
+    defaultConfig {
+        applicationId = "com.reflectos.app"
+        minSdk = 21
+        targetSdk = 34
+        versionCode = 1  // 첫 업로드면 1, 이미 올렸으면 +1
+        versionName = "1.0.0"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled = true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+}
+
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.5.0'
+}
+
+// TWA Manifest 설정
+twaManifest {
+    applicationId = "com.reflectos.app"
+    hostName = "reflectos-main.streamlit.app"  // Streamlit Cloud URL의 hostname
+    name = "ReflectOS"
+    launcherName = "ReflectOS"
+    themeColor = "#FF6B6B"  // 원하는 테마 색상
+    backgroundColor = "#FFFFFF"
+    startUrl = "/"
+    iconUrl = "https://reflectos-main.streamlit.app/icon.png"
+    maskableIconUrl = "https://reflectos-main.streamlit.app/icon-maskable.png"
+    splashScreenFadeOutDuration = 300
+    enableNotifications = true
+    shortcuts = []
+    generatorApp = "bubblewrap-cli"
+}

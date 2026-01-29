@@ -43,3 +43,10 @@ Thumbs.db
 *완료보고*.md
 *가독성*.md
 *가독성*.pdf
+
+# 이전 프로젝트 아카이브 (불필요)
+FaithLoop_extracted/
+FaithLoop.zip
+
+# Android 프로젝트 (빌드 산출물 제외, 소스 코드만 필요 시 선택적 추가)
+ReflectOS-Android/

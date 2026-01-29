@@ -1,0 +1,168 @@
+/*
+ * ReflectOS Android TWA - app/build.gradle
+ * FaithLoop-Android를 기반으로 ReflectOS용으로 수정
+ */
+
+import groovy.xml.MarkupBuilder
+
+plugins {
+    id 'com.android.application'
+}
+
+def twaManifest = [
+    applicationId: 'com.reflectos.app',  // 변경: com.faithloop.app → com.reflectos.app
+    hostName: 'reflectos-xxxx.streamlit.app',  // 변경: Streamlit Cloud URL의 hostname
+    launchUrl: '/',
+    name: 'ReflectOS',  // 변경: FaithLoop → ReflectOS
+    launcherName: 'ReflectOS',  // 변경: FaithLoop → ReflectOS
+    themeColor: '#FF6B6B',  // 변경: 원하는 테마 색상
+    themeColorDark: '#000000',
+    navigationColor: '#000000',
+    navigationColorDark: '#000000',
+    navigationDividerColor: '#000000',
+    navigationDividerColorDark: '#000000',
+    backgroundColor: '#FFFFFF',
+    enableNotifications: true,
+    shortcuts: [],
+    splashScreenFadeOutDuration: 300,
+    generatorApp: 'bubblewrap-cli',
+    fallbackType: 'customtabs',
+    enableSiteSettingsShortcut: 'true',
+    orientation: 'portrait',
+]
+
+android {
+    compileSdkVersion 36
+    namespace "com.reflectos.app"  // 변경: com.faithloop.app → com.reflectos.app
+    defaultConfig {
+        applicationId "com.reflectos.app"  // 변경
+        minSdkVersion 21
+        targetSdkVersion 35
+        versionCode 1  // 변경: 첫 업로드면 1
+        versionName "1.0.0"  // 변경: 원하는 버전
+
+        // The name for the application
+        resValue "string", "appName", twaManifest.name
+
+        // The name for the application on the Android Launcher
+        resValue "string", "launcherName", twaManifest.launcherName
+
+        // The URL that will be used when launching the TWA from the Android Launcher
+        def launchUrl = "https://" + twaManifest.hostName + twaManifest.launchUrl
+        resValue "string", "launchUrl", launchUrl
+
+        // The URL the Web Manifest for the Progressive Web App
+        resValue "string", "webManifestUrl", "https://" + twaManifest.hostName + "/manifest.json"
+
+        // This is used by Meta Quest.
+        resValue "string", "fullScopeUrl", "https://" + twaManifest.hostName + "/"
+
+        // The hostname is used when building the intent-filter
+        resValue "string", "hostName", twaManifest.hostName
+
+        // Status bar colors
+        resValue "color", "colorPrimary", twaManifest.themeColor
+        resValue "color", "colorPrimaryDark", twaManifest.themeColorDark
+
+        // Navigation bar colors
+        resValue "color", "navigationColor", twaManifest.navigationColor
+        resValue "color", "navigationColorDark", twaManifest.navigationColorDark
+        resValue "color", "navigationDividerColor", twaManifest.navigationDividerColor
+        resValue "color", "navigationDividerColorDark", twaManifest.navigationDividerColorDark
+
+        // Background color for splash screen
+        resValue "color", "backgroundColor", twaManifest.backgroundColor
+
+        // File provider authority
+        resValue "string", "providerAuthority", twaManifest.applicationId + '.fileprovider'
+
+        // Enable notifications
+        resValue "bool", "enableNotification", twaManifest.enableNotifications.toString()
+
+        // Shortcuts
+        twaManifest.shortcuts.eachWithIndex { shortcut, index ->
+            resValue "string", "shortcut_name_$index", "$shortcut.name"
+            resValue "string", "shortcut_short_name_$index", "$shortcut.short_name"
+        }
+
+        // Splash screen fade out duration
+        resValue "integer", "splashScreenFadeOutDuration", twaManifest.splashScreenFadeOutDuration.toString()
+
+        resValue "string", "generatorApp", twaManifest.generatorApp
+        resValue "string", "fallbackType", twaManifest.fallbackType
+        resValue "bool", "enableSiteSettingsShortcut", twaManifest.enableSiteSettingsShortcut
+        resValue "string", "orientation", twaManifest.orientation
+    }
+    
+    signingConfigs {
+        release {
+            storeFile file('../android.keystore')  // keystore 파일 경로
+            storePassword System.getenv("KEYSTORE_PASSWORD") ?: project.findProperty("KEYSTORE_PASSWORD") ?: ""
+            keyAlias System.getenv("KEY_ALIAS") ?: project.findProperty("KEY_ALIAS") ?: "reflectos"  // 변경: faithloop → reflectos
+            keyPassword System.getenv("KEY_PASSWORD") ?: project.findProperty("KEY_PASSWORD") ?: ""
+        }
+    }
+    
+    buildTypes {
+        release {
+            minifyEnabled true
+            signingConfig signingConfigs.release
+        }
+    }
+    
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+    
+    lintOptions {
+        checkReleaseBuilds false
+    }
+}
+
+task generateShorcutsFile {
+    assert twaManifest.shortcuts.size() < 5, "You can have at most 4 shortcuts."
+    twaManifest.shortcuts.eachWithIndex { s, i ->
+        assert s.name != null, 'Missing `name` in shortcut #' + i
+        assert s.short_name != null, 'Missing `short_name` in shortcut #' + i
+        assert s.url != null, 'Missing `icon` in shortcut #' + i
+        assert s.icon != null, 'Missing `url` in shortcut #' + i
+    }
+
+    def shortcutsFile = new File("$projectDir/src/main/res/xml", "shortcuts.xml")
+
+    def xmlWriter = new StringWriter()
+    def xmlMarkup = new MarkupBuilder(new IndentPrinter(xmlWriter, "    ", true))
+
+    xmlMarkup
+        .'shortcuts'('xmlns:android': 'http://schemas.android.com/apk/res/android') {
+            twaManifest.shortcuts.eachWithIndex { s, i ->
+                'shortcut'(
+                        'android:shortcutId': 'shortcut' + i,
+                        'android:enabled': 'true',
+                        'android:icon': '@drawable/' + s.icon,
+                        'android:shortcutShortLabel': '@string/shortcut_short_name_' + i,
+                        'android:shortcutLongLabel': '@string/shortcut_name_' + i) {
+                    'intent'(
+                            'android:action': 'android.intent.action.MAIN',
+                            'android:targetPackage': twaManifest.applicationId,
+                            'android:targetClass': twaManifest.applicationId + '.LauncherActivity',
+                            'android:data': s.url)
+                    'categories'('android:name': 'android.intent.category.LAUNCHER')
+                }
+            }
+        }
+    shortcutsFile.text = xmlWriter.toString() + '\n'
+}
+
+preBuild.dependsOn(generateShorcutsFile)
+
+repositories {
+    google()
+    jcenter()
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.6.2'
+}
