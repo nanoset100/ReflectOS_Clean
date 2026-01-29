@@ -1,5 +1,8 @@
-# Secrets (절대 커밋 금지!)
+# Secrets (절대 커밋 금지)
 .streamlit/secrets.toml
+.env
+*.keystore
+*.jks
 
 # Python
 __pycache__/
@@ -23,5 +26,20 @@ Thumbs.db
 
 # Streamlit
 .streamlit/config.toml
-.streamlit/secrets.toml
 
+# Android build outputs
+**/build/
+**/.gradle/
+
+# Release artifacts
+*.aab
+*.apk
+
+# misc
+*.zip
+
+# Docs / Reports (자동 생성/개인 산출물)
+*.pdf
+*완료보고*.md
+*가독성*.md
+*가독성*.pdf

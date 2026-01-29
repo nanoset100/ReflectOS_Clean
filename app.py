@@ -4,10 +4,21 @@ ReflectOS - 개인 회고 & 시간 관리 MVP
 """
 import streamlit as st
 import logging
+import os
 from pathlib import Path
 from lib.auth import is_authenticated, get_current_user, logout
-from lib.auth_ui import render_auth_page
 from lib.modules import MODULE_REGISTRY, get_active_modules
+
+# auth_ui import 오류 방지 (try-except)
+try:
+    from lib.auth_ui import render_auth_page
+except (ImportError, KeyError) as e:
+    logger = logging.getLogger(__name__)
+    logger.error(f"[APP] lib.auth_ui import 실패: {e}")
+    # fallback: auth_ui 없이도 작동하도록
+    def render_auth_page():
+        st.error("인증 모듈을 불러올 수 없습니다. 앱을 재시작해주세요.")
+        st.stop()
 
 # 로깅 설정
 logger = logging.getLogger(__name__)
@@ -55,7 +66,8 @@ pages.append(st.Page("pages/4_Planner.py", title="Planner", icon="📅"))
 pages.append(st.Page("pages/5_Memory.py", title="Memory", icon="🧠"))
 
 # 모듈 그룹 (활성화된 것만 표시)
-# 파일 존재 여부 확인 (Linux 대소문자 민감성 대응)
+# Streamlit Cloud에서는 파일 존재 여부 체크가 부정확할 수 있으므로
+# st.Page()에 직접 추가하고, Streamlit이 자체적으로 에러 처리하도록 함
 
 if "health" in active_modules:
     health_info = MODULE_REGISTRY["health"]
@@ -66,10 +78,8 @@ if "health" in active_modules:
         ("pages/health/report.py", "건강 리포트", "📈")
     ]
     for file_path, title, icon in health_files:
-        if Path(file_path).exists():
-            pages.append(st.Page(file_path, title=title, icon=icon))
-        else:
-            logger.warning(f"[APP] 파일 없음 (건강 모듈): {file_path}")
+        pages.append(st.Page(file_path, title=title, icon=icon))
+    logger.info(f"[APP] 건강 모듈 페이지 등록: {len(health_files)}개")
 
 if "student" in active_modules:
     student_info = MODULE_REGISTRY["student"]
@@ -79,16 +89,9 @@ if "student" in active_modules:
         ("pages/student/report.py", "학습 리포트", "📊"),
         ("pages/student/coaching.py", "슬럼프 로그", "😔")
     ]
-    missing_files = []
     for file_path, title, icon in student_files:
-        if Path(file_path).exists():
-            pages.append(st.Page(file_path, title=title, icon=icon))
-        else:
-            missing_files.append(file_path)
-            logger.warning(f"[MISSING] 수험생 모듈 파일 없음: {file_path}")
-    
-    if missing_files:
-        logger.error(f"[MISSING] 수험생 모듈 활성화됐지만 파일 누락: {missing_files}")
+        pages.append(st.Page(file_path, title=title, icon=icon))
+    logger.info(f"[APP] 수험생 모듈 페이지 등록: {len(student_files)}개 (active_modules={active_modules})")
 
 if "jobseeker" in active_modules:
     jobseeker_info = MODULE_REGISTRY["jobseeker"]
@@ -98,42 +101,16 @@ if "jobseeker" in active_modules:
         ("pages/jobseeker/resume.py", "이력서 관리", "📄"),
         ("pages/jobseeker/report.py", "취준 리포트", "📊")
     ]
-    missing_files = []
     for file_path, title, icon in jobseeker_files:
-        if Path(file_path).exists():
-            pages.append(st.Page(file_path, title=title, icon=icon))
-        else:
-            missing_files.append(file_path)
-            logger.warning(f"[MISSING] 취준생 모듈 파일 없음: {file_path}")
-    
-    if missing_files:
-        logger.error(f"[MISSING] 취준생 모듈 활성화됐지만 파일 누락: {missing_files}")
+        pages.append(st.Page(file_path, title=title, icon=icon))
+    logger.info(f"[APP] 취준생 모듈 페이지 등록: {len(jobseeker_files)}개 (active_modules={active_modules})")
 
-# 진단 로그: 파일 존재 여부 확인 (1회만 출력)
-if not hasattr(st.session_state, "_file_check_logged"):
-    logger.info("[APP] 파일 존재 여부 확인:")
-    for module_id in ["health", "student", "jobseeker"]:
-        if module_id == "health":
-            files_to_check = [
-                "pages/health/today.py", "pages/health/weight.py",
-                "pages/health/exercise.py", "pages/health/report.py"
-            ]
-        elif module_id == "student":
-            files_to_check = [
-                "pages/student/today.py", "pages/student/subjects.py",
-                "pages/student/report.py", "pages/student/coaching.py"
-            ]
-        else:  # jobseeker
-            files_to_check = [
-                "pages/jobseeker/tracker.py", "pages/jobseeker/interview.py",
-                "pages/jobseeker/resume.py", "pages/jobseeker/report.py"
-            ]
-        
-        for file_path in files_to_check:
-            exists = Path(file_path).exists()
-            logger.info(f"  {file_path}: {'✓' if exists else '✗'}")
-    
-    st.session_state._file_check_logged = True
+# 진단 로그: 환경 정보 (1회만 출력)
+if not hasattr(st.session_state, "_env_logged"):
+    logger.info(f"[APP] 작업 디렉토리: {os.getcwd()}")
+    logger.info(f"[APP] app.py 위치: {__file__}")
+    logger.info(f"[APP] 활성 모듈: {active_modules}")
+    st.session_state._env_logged = True
 
 # 설정 (항상 표시)
 pages.append(st.Page("pages/6_Settings.py", title="Settings", icon="⚙️"))

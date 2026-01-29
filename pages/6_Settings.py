@@ -17,9 +17,10 @@ if not is_authenticated():
     st.info("로그인 페이지로 이동합니다...")
     st.stop()
 
-# 사용자 정보 가져오기 (None 체크 강화)
+# 사용자 정보 가져오기 (None 체크 강화 - 절대 user.id 직접 접근 금지)
 user = get_current_user()
-if user is None or getattr(user, "id", None) is None:
+if user is None:
+    logger.error("[SETTINGS] user is None - 로그인 필요")
     st.error("❌ 로그인이 필요합니다. 다시 로그인해주세요.")
     try:
         from lib.auth import logout
@@ -28,7 +29,17 @@ if user is None or getattr(user, "id", None) is None:
         pass
     st.stop()
 
-user_id = user.id
+# user.id 안전하게 접근
+user_id = getattr(user, "id", None)
+if user_id is None:
+    logger.error("[SETTINGS] user.id is None - 세션 만료")
+    st.error("❌ 사용자 세션이 만료되었습니다. 다시 로그인해주세요.")
+    try:
+        from lib.auth import logout
+        logout()  # 세션 정리
+    except:
+        pass
+    st.stop()
 user_email = getattr(user, 'email', 'unknown')
 logger.info(f"[SETTINGS] 페이지 로드: user_id={user_id}, email={user_email}")
 
