@@ -4,12 +4,33 @@ ReflectOS - Settings
 Step 9: Google Calendar OAuth 연결
 """
 import streamlit as st
+import logging
 from urllib.parse import parse_qs, urlparse
-from lib.auth import get_current_user
+from lib.auth import get_current_user, is_authenticated
 
-# 사용자 정보 가져오기
+# 로깅 설정
+logger = logging.getLogger(__name__)
+
+# === 인증 체크 (치명 오류 방지) ===
+if not is_authenticated():
+    st.warning("⚠️ 로그인이 필요합니다.")
+    st.info("로그인 페이지로 이동합니다...")
+    st.stop()
+
+# 사용자 정보 가져오기 (None 체크 강화)
 user = get_current_user()
+if user is None or getattr(user, "id", None) is None:
+    st.error("❌ 로그인이 필요합니다. 다시 로그인해주세요.")
+    try:
+        from lib.auth import logout
+        logout()  # 세션 정리
+    except:
+        pass
+    st.stop()
+
 user_id = user.id
+user_email = getattr(user, 'email', 'unknown')
+logger.info(f"[SETTINGS] 페이지 로드: user_id={user_id}, email={user_email}")
 
 st.title("⚙️ Settings")
 st.caption("연동 및 환경 설정을 관리하세요")
@@ -268,9 +289,12 @@ st.subheader("🔌 모듈 활성화")
 
 try:
     from lib.modules import MODULE_REGISTRY, get_active_modules, set_active_modules
+    from lib.config import get_supabase_client
     
     # 현재 활성 모듈 로드
     current_active = get_active_modules(user_id)
+    
+    logger.info(f"[SETTINGS] 현재 활성 모듈: user_id={user_id}, active={current_active}")
     
     st.caption("사용할 모듈을 선택하세요. 선택한 모듈이 메뉴에 표시됩니다.")
     
@@ -287,21 +311,44 @@ try:
         if checked:
             selected_modules.append(module_id)
     
+    logger.info(f"[SETTINGS] 선택된 모듈: user_id={user_id}, selected={selected_modules}")
+    
     # 저장 버튼
     if st.button("💾 모듈 설정 저장", use_container_width=True, type="primary"):
         try:
-            success = set_active_modules(user_id, selected_modules)
-            if success:
-                st.success("✅ 모듈 설정이 저장되었습니다!")
-                st.info("페이지를 새로고침하면 메뉴가 업데이트됩니다.")
-                st.rerun()  # 메뉴 즉시 갱신
-            else:
-                st.error("❌ 저장에 실패했습니다.")
+            # 반환값 언패킹 (핵심 버그 수정)
+            ok, msg = set_active_modules(user_id, selected_modules)
+            
+            if not ok:
+                st.error(f"❌ 모듈 저장 실패: {msg}")
+                logger.error(f"[SETTINGS] 저장 실패: user_id={user_id}, selected={selected_modules}, error={msg}")
+                st.stop()  # 실패 시 여기서 중단
+            
+            # 저장 성공 시: 캐시 클리어 → 재조회 → rerun
+            logger.info(f"[SETTINGS] 저장 성공: user_id={user_id}, saved_modules={selected_modules}, msg={msg}")
+            
+            # 캐시 클리어 (저장 직후 메뉴 갱신을 위해)
+            get_active_modules.clear()
+            
+            # 즉시 재조회하여 실제 저장값 확인
+            saved_active = get_active_modules(user_id)
+            logger.info(f"[SETTINGS] 저장 후 재조회: user_id={user_id}, active_modules={saved_active}")
+            
+            # 성공 메시지
+            st.success("✅ 모듈 설정이 저장되었습니다!")
+            
+            # 자동 갱신 (rerun)
+            st.rerun()
+            
         except Exception as e:
-            st.error(f"❌ 저장 중 오류 발생: {e}")
+            error_msg = f"저장 중 오류 발생: {e}"
+            logger.error(f"[SETTINGS] 저장 예외: user_id={user_id}, selected={selected_modules}, error={error_msg}")
+            st.error(f"❌ {error_msg}")
     
 except Exception as e:
-    st.error(f"모듈 설정 로드 오류: {e}")
+    error_msg = f"모듈 설정 로드 오류: {e}"
+    logger.error(f"[SETTINGS] 모듈 설정 로드 실패: {error_msg}")
+    st.error(error_msg)
 
 
 st.divider()
