@@ -125,20 +125,9 @@ if not hasattr(st.session_state, "_env_logged"):
 # 설정 (항상 표시)
 pages.append(st.Page("pages/6_Settings.py", title="Settings", icon="⚙️"))
 
-# === pages 리스트 검증 (st.navigation 오류 방지) ===
-# None이나 잘못된 객체 제거
-# isinstance(page, st.Page)는 Streamlit 버전에 따라 작동하지 않을 수 있으므로
-# hasattr로 Page 객체인지 확인
-valid_pages = []
-for i, page in enumerate(pages):
-    if page is None:
-        logger.warning(f"[APP] pages[{i}]가 None입니다. 건너뜁니다.")
-        continue
-    # st.Page 객체인지 확인 (isinstance 대신 hasattr 사용)
-    if not hasattr(page, '_script_path') and not hasattr(page, 'script_path'):
-        logger.warning(f"[APP] pages[{i}]가 st.Page 객체가 아닙니다: {type(page)}. 건너뜁니다.")
-        continue
-    valid_pages.append(page)
+# === pages 리스트 검증 (None만 제거, st.navigation이 나머지 처리) ===
+# st.Page()가 반환하는 객체는 유효하므로, None 체크만 수행
+valid_pages = [page for page in pages if page is not None]
 
 logger.info(f"[APP] 페이지 구성 완료: 총 {len(valid_pages)}개 (원본 {len(pages)}개)")
 
