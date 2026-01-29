@@ -68,12 +68,12 @@ except Exception as e:
 # === 네비게이션 페이지 구성 ===
 pages = []
 
-# 공통 기능 그룹
-pages.append(st.Page("pages/1_Home.py", title="Home", icon="🏠"))
-pages.append(st.Page("pages/2_Checkin.py", title="Check-in", icon="✍️"))
-pages.append(st.Page("pages/3_Report.py", title="Report", icon="📊"))
-pages.append(st.Page("pages/4_Planner.py", title="Planner", icon="📅"))
-pages.append(st.Page("pages/5_Memory.py", title="Memory", icon="🧠"))
+# 공통 기능 그룹 (고유한 url_pathname 지정)
+pages.append(st.Page("pages/1_Home.py", title="Home", icon="🏠", url_pathname="home"))
+pages.append(st.Page("pages/2_Checkin.py", title="Check-in", icon="✍️", url_pathname="checkin"))
+pages.append(st.Page("pages/3_Report.py", title="Report", icon="📊", url_pathname="report"))
+pages.append(st.Page("pages/4_Planner.py", title="Planner", icon="📅", url_pathname="planner"))
+pages.append(st.Page("pages/5_Memory.py", title="Memory", icon="🧠", url_pathname="memory"))
 
 # 모듈 그룹 (활성화된 것만 표시)
 # Streamlit Cloud에서는 파일 존재 여부 체크가 부정확할 수 있으므로
@@ -82,37 +82,37 @@ pages.append(st.Page("pages/5_Memory.py", title="Memory", icon="🧠"))
 if "health" in active_modules:
     health_info = MODULE_REGISTRY["health"]
     health_files = [
-        ("pages/health/today.py", "오늘 기록", "📝"),
-        ("pages/health/weight.py", "체중", "⚖️"),
-        ("pages/health/exercise.py", "운동", "🏋️"),
-        ("pages/health/report.py", "건강 리포트", "📈")
+        ("pages/health/today.py", "오늘 기록", "📝", "health_today"),
+        ("pages/health/weight.py", "체중", "⚖️", "health_weight"),
+        ("pages/health/exercise.py", "운동", "🏋️", "health_exercise"),
+        ("pages/health/report.py", "건강 리포트", "📈", "health_report")
     ]
-    for file_path, title, icon in health_files:
-        pages.append(st.Page(file_path, title=title, icon=icon))
+    for file_path, title, icon, url_path in health_files:
+        pages.append(st.Page(file_path, title=title, icon=icon, url_pathname=url_path))
     logger.info(f"[APP] 건강 모듈 페이지 등록: {len(health_files)}개")
 
 if "student" in active_modules:
     student_info = MODULE_REGISTRY["student"]
     student_files = [
-        ("pages/student/today.py", "오늘 학습", "📖"),
-        ("pages/student/subjects.py", "과목 목표", "📋"),
-        ("pages/student/report.py", "학습 리포트", "📊"),
-        ("pages/student/coaching.py", "슬럼프 로그", "😔")
+        ("pages/student/today.py", "오늘 학습", "📖", "student_today"),
+        ("pages/student/subjects.py", "과목 목표", "📋", "student_subjects"),
+        ("pages/student/report.py", "학습 리포트", "📊", "student_report"),
+        ("pages/student/coaching.py", "슬럼프 로그", "😔", "student_coaching")
     ]
-    for file_path, title, icon in student_files:
-        pages.append(st.Page(file_path, title=title, icon=icon))
+    for file_path, title, icon, url_path in student_files:
+        pages.append(st.Page(file_path, title=title, icon=icon, url_pathname=url_path))
     logger.info(f"[APP] 수험생 모듈 페이지 등록: {len(student_files)}개 (active_modules={active_modules})")
 
 if "jobseeker" in active_modules:
     jobseeker_info = MODULE_REGISTRY["jobseeker"]
     jobseeker_files = [
-        ("pages/jobseeker/tracker.py", "지원 현황", "📮"),
-        ("pages/jobseeker/interview.py", "면접 기록", "💬"),
-        ("pages/jobseeker/resume.py", "이력서 관리", "📄"),
-        ("pages/jobseeker/report.py", "취준 리포트", "📊")
+        ("pages/jobseeker/tracker.py", "지원 현황", "📮", "jobseeker_tracker"),
+        ("pages/jobseeker/interview.py", "면접 기록", "💬", "jobseeker_interview"),
+        ("pages/jobseeker/resume.py", "이력서 관리", "📄", "jobseeker_resume"),
+        ("pages/jobseeker/report.py", "취준 리포트", "📊", "jobseeker_report")
     ]
-    for file_path, title, icon in jobseeker_files:
-        pages.append(st.Page(file_path, title=title, icon=icon))
+    for file_path, title, icon, url_path in jobseeker_files:
+        pages.append(st.Page(file_path, title=title, icon=icon, url_pathname=url_path))
     logger.info(f"[APP] 취준생 모듈 페이지 등록: {len(jobseeker_files)}개 (active_modules={active_modules})")
 
 # 진단 로그: 환경 정보 (1회만 출력)
@@ -123,16 +123,19 @@ if not hasattr(st.session_state, "_env_logged"):
     st.session_state._env_logged = True
 
 # 설정 (항상 표시)
-pages.append(st.Page("pages/6_Settings.py", title="Settings", icon="⚙️"))
+pages.append(st.Page("pages/6_Settings.py", title="Settings", icon="⚙️", url_pathname="settings"))
 
 # === pages 리스트 검증 (st.navigation 오류 방지) ===
 # None이나 잘못된 객체 제거
+# isinstance(page, st.Page)는 Streamlit 버전에 따라 작동하지 않을 수 있으므로
+# hasattr로 Page 객체인지 확인
 valid_pages = []
 for i, page in enumerate(pages):
     if page is None:
         logger.warning(f"[APP] pages[{i}]가 None입니다. 건너뜁니다.")
         continue
-    if not isinstance(page, st.Page):
+    # st.Page 객체인지 확인 (isinstance 대신 hasattr 사용)
+    if not hasattr(page, '_script_path') and not hasattr(page, 'script_path'):
         logger.warning(f"[APP] pages[{i}]가 st.Page 객체가 아닙니다: {type(page)}. 건너뜁니다.")
         continue
     valid_pages.append(page)
@@ -142,8 +145,8 @@ logger.info(f"[APP] 페이지 구성 완료: 총 {len(valid_pages)}개 (원본 {
 # pages가 비어있으면 기본 페이지라도 추가
 if not valid_pages:
     logger.error("[APP] 유효한 페이지가 없습니다! 기본 페이지를 추가합니다.")
-    valid_pages.append(st.Page("pages/1_Home.py", title="Home", icon="🏠"))
-    valid_pages.append(st.Page("pages/6_Settings.py", title="Settings", icon="⚙️"))
+    valid_pages.append(st.Page("pages/1_Home.py", title="Home", icon="🏠", url_pathname="home"))
+    valid_pages.append(st.Page("pages/6_Settings.py", title="Settings", icon="⚙️", url_pathname="settings"))
 
 # === 사이드바: 사용자 정보 + 로그아웃 ===
 with st.sidebar:
